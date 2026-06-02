@@ -1,4 +1,4 @@
-import { applyBoxHeadWarp } from "../effects/boxHeadWarp.js";
+import { applyBoxHeadWarpAsync } from "../effects/boxHeadWarp.js";
 
 function makeSourceCanvas(image, scale) {
   const canvas = document.createElement("canvas");
@@ -11,32 +11,72 @@ function makeSourceCanvas(image, scale) {
   return canvas;
 }
 
-export function exportWarpedImage({ image, warpBox, settings, scale, filename }) {
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("The browser could not create a PNG from this canvas."));
+    }, "image/png");
+  });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return url;
+}
+
+export async function exportWarpedImage({
+  image,
+  warpRegions,
+  warpBox,
+  settings,
+  scale,
+  filename,
+  onProgress,
+}) {
+  onProgress?.(0.02);
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+
   const sourceCanvas = makeSourceCanvas(image, scale);
   const targetCanvas = document.createElement("canvas");
-  const scaledWarpBox = warpBox
-    ? {
-        x: warpBox.x * scale,
-        y: warpBox.y * scale,
-        width: warpBox.width * scale,
-        height: warpBox.height * scale,
-      }
-    : null;
+  const regions = warpRegions || (warpBox ? [warpBox] : []);
+  const scaledWarpRegions = regions.map((region) => ({
+    ...region,
+    x: region.x * scale,
+    y: region.y * scale,
+    width: region.width * scale,
+    height: region.height * scale,
+    points: region.points?.map((point) => ({
+      x: point.x * scale,
+      y: point.y * scale,
+    })),
+    meshPoints: region.meshPoints?.map((point) => ({
+      x: point.x * scale,
+      y: point.y * scale,
+    })),
+  }));
 
-  applyBoxHeadWarp({
+  await applyBoxHeadWarpAsync({
     sourceCanvas,
     targetCanvas,
-    warpBox: scaledWarpBox,
+    warpRegions: scaledWarpRegions,
     settings,
+    onProgress,
   });
 
-  targetCanvas.toBlob((blob) => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, "image/png");
+  onProgress?.(0.92);
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const blob = await canvasToBlob(targetCanvas);
+  onProgress?.(0.98);
+  const downloadUrl = downloadBlob(blob, filename);
+  onProgress?.(1);
+  return { downloadUrl, filename };
 }
