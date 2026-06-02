@@ -1,9 +1,9 @@
 import { buildWarpMesh } from "./boxHeadWarp.js";
 
-export function drawMeshOverlay(context, width, height, warpBox, settings) {
-  if (!warpBox) return;
+export function drawMeshOverlay(context, width, height, warpRegions, settings) {
+  if (!warpRegions || warpRegions.length === 0) return;
 
-  const mesh = buildWarpMesh(width, height, warpBox, settings);
+  const mesh = buildWarpMesh(width, height, warpRegions, settings);
   context.save();
   context.lineWidth = Math.max(0.75, width / 900);
   context.strokeStyle = "rgba(255, 255, 255, 0.68)";
